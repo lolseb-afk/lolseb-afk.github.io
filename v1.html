@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>ShurikenAI</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    :root {
+      --bg-main: #212121;
+      --bg-sidebar: #171717;
+      --bg-input: #2f2f2f;
+      --bg-user-msg: #2f2f2f;
+      --bg-hover: #2a2a2a;
+      --text-primary: #ececec;
+      --text-secondary: #b4b4b4;
+      --border-color: rgba(255, 255, 255, 0.1);
+      --accent: #10a37f;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      display: flex;
+      height: 100dvh;
+      overflow: hidden;
+    }
+
+    #sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 40;
+    }
+
+    aside {
+      width: 260px;
+      background-color: var(--bg-sidebar);
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      transition: transform 0.25s ease;
+      z-index: 50;
+      border-right: 1px solid var(--border-color);
+    }
+
+    .new-chat-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 10px 12px;
+      background: transparent;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      margin-bottom: 16px;
+    }
+
+    .new-chat-btn:hover { background: var(--bg-hover); }
+
+    .sidebar-section-title {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      padding: 4px 10px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    #history-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 10px;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      cursor: pointer;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .history-item:hover, .history-item.active { background: var(--bg-hover); }
+    .history-item span { overflow: hidden; text-overflow: ellipsis; }
+
+    .delete-chat {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 2px 5px;
+    }
+    .delete-chat:hover { color: #ef4444; }
+
+    .sidebar-footer {
+      border-top: 1px solid var(--border-color);
+      padding-top: 12px;
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .api-label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+    }
+
+    .api-input, .model-select {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      outline: none;
+    }
+    .api-input:focus, .model-select:focus { border-color: var(--accent); }
+
+    .main-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      min-width: 0;
+    }
+
+    header {
+      height: 54px;
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 10px; }
+
+    #menu-toggle {
+      display: none;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 1.3rem;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 8px;
+    }
+
+    .model-selector {
+      font-size: 1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #chat-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 16px 30px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-column {
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      flex: 1;
+    }
+
+    .empty-state {
+      text-align: center;
+      margin: auto;
+      padding: 40px 16px;
+      max-width: 650px;
+    }
+    .empty-state h2 { font-size: 1.65rem; margin-bottom: 24px; }
+
+    .suggestions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .suggestion-card {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 14px;
+      text-align: left;
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+    .suggestion-card:hover { background: var(--bg-hover); }
+    .suggestion-card strong { display: block; font-size: 0.88rem; margin-bottom: 3px; }
+    .suggestion-card span { font-size: 0.8rem; color: var(--text-secondary); }
+
+    .msg-row { display: flex; width: 100%; }
+    .msg-row.user { justify-content: flex-end; }
+
+    .msg-user-bubble {
+      background-color: var(--bg-user-msg);
+      padding: 11px 16px;
+      border-radius: 20px;
+      max-width: 75%;
+      line-height: 1.55;
+      font-size: 0.96rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .msg-bot-row { display: flex; gap: 14px; width: 100%; align-items: flex-start; }
+
+    .bot-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #2f2f2f;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 0.85rem;
+      font-weight: bold;
+    }
+
+    .msg-bot-content { flex: 1; min-width: 0; line-height: 1.65; font-size: 0.96rem; }
+    .msg-bot-content p { margin-bottom: 12px; }
+    .msg-bot-content p:last-child { margin-bottom: 0; }
+    .msg-bot-content ul, .msg-bot-content ol { margin: 8px 0 12px 22px; }
+    .msg-bot-content pre {
+      background: #0d0d0d;
+      border-radius: 10px;
+      padding: 14px;
+      overflow-x: auto;
+      margin: 12px 0;
+      border: 1px solid var(--border-color);
+      position: relative;
+    }
+    .msg-bot-content code {
+      font-family: monospace;
+      font-size: 0.86rem;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+    .msg-bot-content pre code { background: transparent; padding: 0; }
+
+    .copy-code-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: #2f2f2f;
+      color: var(--text-secondary);
+      border: none;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+    .copy-code-btn:hover { color: #fff; }
+
+    .error-banner {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+    }
+
+    .typing-dots { display: inline-flex; gap: 4px; padding: 8px 0; }
+    .typing-dots span {
+      width: 7px;
+      height: 7px;
+      background: var(--text-secondary);
+      border-radius: 50%;
+      animation: bounce 1.3s infinite ease-in-out;
+    }
+    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40% { transform: scale(1); opacity: 1; }
+    }
+
+    .input-container { padding: 8px 16px 20px; }
+
+    .input-box {
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--bg-input);
+      border-radius: 26px;
+      padding: 8px 12px 8px 18px;
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.96rem;
+      line-height: 1.45;
+      resize: none;
+      max-height: 180px;
+      min-height: 26px;
+      padding: 4px 0;
+      outline: none;
+    }
+
+    #send-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: none;
+      background: #ffffff;
+      color: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    #send-btn:disabled { background: #676767; cursor: not-allowed; }
+
+    @media (max-width: 768px) {
+      aside {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        transform: translateX(-100%);
+      }
+      aside.open { transform: translateX(0); }
+      #sidebar-overlay.open { display: block; }
+      #menu-toggle { display: block; }
+      .suggestions { grid-template-columns: 1fr; }
+      .msg-user-bubble { max-width: 88%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar-overlay"></div>
+
+  <aside id="sidebar">
+    <button class="new-chat-btn" id="new-chat-btn">
+      <span>+ Nuevo chat</span>
+      <span>✎</span>
+    </button>
+
+    <div class="sidebar-section-title">Historial</div>
+    <div id="history-list"></div>
+
+    <div class="sidebar-footer">
+      <div>
+        <label class="api-label" for="provider-select">Proveedor API</label>
+        <select id="provider-select" class="model-select">
+          <option value="gemini">Google Gemini (3 Flash)</option>
+          <option value="groq">Groq (Llama 3.3 70B)</option>
+          <option value="openai">OpenAI (GPT-4o mini)</option>
+          <option value="openrouter">OpenRouter</option>
+        </select>
+      </div>
+      <div>
+        <label class="api-label" for="api-key-input">API Key</label>
+        <input type="password" id="api-key-input" class="api-input" placeholder="Pega tu clave AQ... aquí" />
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-area">
+    <header>
+      <div class="header-left">
+        <button id="menu-toggle" aria-label="Abrir menú">☰</button>
+        <div class="model-selector">
+          <span>✦ ShurikenAI</span>
+        </div>
+      </div>
+    </header>
+
+    <div id="chat-scroll">
+      <div class="chat-column" id="chat-container">
+        <div class="empty-state" id="empty-state">
+          <h2>¿En qué puedo ayudarte hoy?</h2>
+          <div class="suggestions">
+            <button class="suggestion-card" data-prompt="Explícame cómo funciona una API REST con un ejemplo simple">
+              <strong>Explicar un concepto</strong>
+              <span>Cómo funciona una API REST</span>
+            </button>
+            <button class="suggestion-card" data-prompt="Escribe una función en JavaScript para validar un correo electrónico">
+              <strong>Escribir código</strong>
+              <span>Validar correo en JavaScript</span>
+            </button>
+            <button class="suggestion-card" data-prompt="Dame 5 ideas de proyectos web para practicar programación">
+              <strong>Ideas de proyectos</strong>
+              <span>Apps web para practicar</span>
+            </button>
+            <button class="suggestion-card" data-prompt="Resume las ventajas de usar CSS Grid frente a Flexbox">
+              <strong>Comparar tecnologías</strong>
+              <span>CSS Grid vs Flexbox</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-container">
+      <div class="input-box">
+        <textarea id="prompt-input" rows="1" placeholder="Envía un mensaje a ShurikenAI..."></textarea>
+        <button id="send-btn" title="Enviar">▲</button>
+      </div>
+    </div>
+  </main>
+  <script>
+    const PROVIDERS = {
+      gemini: {
+        type: 'gemini-native',
+        model: 'gemini-3-flash-preview'
+      },
+      groq: {
+        type: 'openai-compat',
+        url: 'https://api.groq.com/openai/v1/chat/completions',
+        model: 'llama-3.3-70b-versatile'
+      },
+      openai: {
+        type: 'openai-compat',
+        url: 'https://api.openai.com/v1/chat/completions',
+        model: 'gpt-4o-mini'
+      },
+      openrouter: {
+        type: 'openai-compat',
+        url: 'https://openrouter.ai/api/v1/chat/completions',
+        model: 'meta-llama/llama-3.3-70b-instruct'
+      }
+    };
+
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const menuToggle = document.getElementById('menu-toggle');
+    const newChatBtn = document.getElementById('new-chat-btn');
+    const historyList = document.getElementById('history-list');
+    const providerSelect = document.getElementById('provider-select');
+    const apiKeyInput = document.getElementById('api-key-input');
+    const chatScroll = document.getElementById('chat-scroll');
+    const chatContainer = document.getElementById('chat-container');
+    const emptyState = document.getElementById('empty-state');
+    const promptInput = document.getElementById('prompt-input');
+    const sendBtn = document.getElementById('send-btn');
+
+    let chats = JSON.parse(localStorage.getItem('shuriken_chats') || '[]');
+    let currentChatId = null;
+    let isGenerating = false;
+
+    apiKeyInput.value = localStorage.getItem('shuriken_api_key') || '';
+    const savedProvider = localStorage.getItem('shuriken_provider');
+    providerSelect.value = PROVIDERS[savedProvider] ? savedProvider : 'gemini';
+
+    apiKeyInput.addEventListener('input', () => {
+      localStorage.setItem('shuriken_api_key', apiKeyInput.value.trim());
+    });
+
+    providerSelect.addEventListener('change', () => {
+      localStorage.setItem('shuriken_provider', providerSelect.value);
+    });
+
+    function toggleSidebar(force) {
+      const open = force !== undefined ? force : !sidebar.classList.contains('open');
+      sidebar.classList.toggle('open', open);
+      overlay.classList.toggle('open', open);
+    }
+
+    menuToggle.addEventListener('click', () => toggleSidebar());
+    overlay.addEventListener('click', () => toggleSidebar(false));
+
+    promptInput.addEventListener('input', () => {
+      promptInput.style.height = 'auto';
+      promptInput.style.height = Math.min(promptInput.scrollHeight, 180) + 'px';
+    });
+
+    promptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+    newChatBtn.addEventListener('click', startNewChat);
+
+    document.querySelectorAll('.suggestion-card').forEach(card => {
+      card.addEventListener('click', () => {
+        promptInput.value = card.dataset.prompt;
+        sendMessage();
+      });
+    });
+
+    function saveChats() {
+      localStorage.setItem('shuriken_chats', JSON.stringify(chats));
+      renderHistory();
+    }
+
+    function startNewChat() {
+      currentChatId = null;
+      chatContainer.innerHTML = '';
+      chatContainer.appendChild(emptyState);
+      emptyState.style.display = 'block';
+      renderHistory();
+      toggleSidebar(false);
+    }
+
+    function loadChat(id) {
+      const chat = chats.find(c => c.id === id);
+      if (!chat) return;
+      currentChatId = id;
+      chatContainer.innerHTML = '';
+      chat.messages.forEach(msg => appendMessageUI(msg.role, msg.content));
+      renderHistory();
+      toggleSidebar(false);
+      scrollToBottom();
+    }
+
+    function deleteChat(id, e) {
+      e.stopPropagation();
+      chats = chats.filter(c => c.id !== id);
+      if (currentChatId === id) {
+        startNewChat();
+      }
+      saveChats();
+    }
+
+    function renderHistory() {
+      historyList.innerHTML = '';
+      chats.forEach(chat => {
+        const item = document.createElement('div');
+        item.className = 'history-item' + (chat.id === currentChatId ? ' active' : '');
+        item.innerHTML = '<span>' + escapeHtml(chat.title) + '</span><button class="delete-chat" title="Eliminar">✕</button>';
+        item.addEventListener('click', () => loadChat(chat.id));
+        item.querySelector('.delete-chat').addEventListener('click', (e) => deleteChat(chat.id, e));
+        historyList.appendChild(item);
+      });
+    }
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function scrollToBottom() {
+      chatScroll.scrollTop = chatScroll.scrollHeight;
+    }
+
+    function renderMarkdown(text) {
+      if (typeof marked !== 'undefined') {
+        return marked.parse(text);
+      }
+      return '<p>' + escapeHtml(text).replace(/\n/g, '<br>') + '</p>';
+    }
+
+    function enhanceCodeBlocks(container) {
+      container.querySelectorAll('pre').forEach(pre => {
+        if (pre.querySelector('.copy-code-btn')) return;
+        const btn = document.createElement('button');
+        btn.className = 'copy-code-btn';
+        btn.textContent = 'Copiar';
+        btn.addEventListener('click', () => {
+          const code = pre.querySelector('code')?.innerText || pre.innerText;
+          navigator.clipboard.writeText(code);
+          btn.textContent = '¡Copiado!';
+          setTimeout(() => (btn.textContent = 'Copiar'), 1500);
+        });
+        pre.appendChild(btn);
+      });
+    }
+
+    function appendMessageUI(role, content, isError = false) {
+      if (emptyState.parentNode === chatContainer) {
+        emptyState.style.display = 'none';
+      }
+
+      const row = document.createElement('div');
+      if (role === 'user') {
+        row.className = 'msg-row user';
+        row.innerHTML = '<div class="msg-user-bubble">' + escapeHtml(content) + '</div>';
+      } else {
+        row.className = 'msg-bot-row';
+        const bodyHtml = isError
+          ? '<div class="error-banner">' + escapeHtml(content) + '</div>'
+          : renderMarkdown(content);
+        row.innerHTML = '<div class="bot-avatar">✦</div><div class="msg-bot-content">' + bodyHtml + '</div>';
+        if (!isError) enhanceCodeBlocks(row);
+      }
+
+      chatContainer.appendChild(row);
+      scrollToBottom();
+      return row;
+    }
+
+    function showTypingIndicator() {
+      const row = document.createElement('div');
+      row.className = 'msg-bot-row';
+      row.id = 'typing-indicator';
+      row.innerHTML = '<div class="bot-avatar">✦</div><div class="msg-bot-content"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+      chatContainer.appendChild(row);
+      scrollToBottom();
+    }
+
+    function removeTypingIndicator() {
+      document.getElementById('typing-indicator')?.remove();
+    }
+
+    async function sendMessage() {
+      const text = promptInput.value.trim();
+      if (!text || isGenerating) return;
+
+      const apiKey = apiKeyInput.value.trim();
+      if (!apiKey) {
+        appendMessageUI('assistant', 'Falta tu API Key. Pégala en el panel lateral izquierdo antes de enviar un mensaje.', true);
+        return;
+      }
+
+      if (!currentChatId) {
+        currentChatId = Date.now().toString();
+        chats.unshift({
+          id: currentChatId,
+          title: text.slice(0, 36),
+          messages: []
+        });
+      }
+
+      const currentChat = chats.find(c => c.id === currentChatId);
+      currentChat.messages.push({ role: 'user', content: text });
+      appendMessageUI('user', text);
+      saveChats();
+
+      promptInput.value = '';
+      promptInput.style.height = 'auto';
+      isGenerating = true;
+      sendBtn.disabled = true;
+      showTypingIndicator();
+
+      const provider = PROVIDERS[providerSelect.value] || PROVIDERS.gemini;
+
+      try {
+        let response, data, reply;
+
+        if (provider.type === 'gemini-native') {
+          const dominio = ['generativelanguage', 'googleapis', 'com'].join('.');
+          const ruta = ['v1beta', 'models', provider.model + ':generateContent'].join('/');
+          const url = 'https://' + dominio + '/' + ruta;
+          const contents = currentChat.messages.map(m => ({
+            role: m.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: m.content }]
+          }));
+
+          response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': apiKey
+            },
+            body: JSON.stringify({
+              systemInstruction: {
+                parts: [{ text: 'Eres ShurikenAI, un asistente útil, claro y conciso que responde en español.' }]
+              },
+              contents: contents
+            })
+          });
+
+          data = await response.json();
+          removeTypingIndicator();
+
+          if (!response.ok) {
+            const errMsg = (data && data.error && data.error.message) || ('Error HTTP ' + response.status + ' en Gemini.');
+            appendMessageUI('assistant', errMsg, true);
+            return;
+          }
+
+          reply = data?.candidates?.at(0)?.content?.parts?.at(0)?.text || 'Gemini respondió sin texto.';
+        } else {
+          response = await fetch(provider.url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + apiKey
+            },
+            body: JSON.stringify({
+              model: provider.model,
+              messages: [
+                { role: 'system', content: 'Eres ShurikenAI, un asistente útil, claro y conciso que responde en español.' },
+                ...currentChat.messages
+              ]
+            })
+          });
+
+          data = await response.json();
+          removeTypingIndicator();
+
+          if (!response.ok) {
+            const errMsg = (data && data.error && data.error.message) || ('Error HTTP ' + response.status + ' al conectar con la API.');
+            appendMessageUI('assistant', errMsg, true);
+            return;
+          }
+
+          reply = data?.choices?.at(0)?.message?.content || 'La API respondió sin texto.';
+        }
+
+        currentChat.messages.push({ role: 'assistant', content: reply });
+        appendMessageUI('assistant', reply);
+        saveChats();
+      } catch (err) {
+        removeTypingIndicator();
+        appendMessageUI('assistant', 'Error de red: ' + err.message, true);
+      } finally {
+        isGenerating = false;
+        sendBtn.disabled = false;
+        promptInput.focus();
+      }
+    }
+
+    renderHistory();
+  </script>
+</body>
+</html>
